@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import javax.annotation.Resource;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -36,10 +37,16 @@ public class OrderServiceTest {
         System.out.println(result);
     }
 
+    // 同时包含优惠卷和余额扣减
     @Test
     public void confirmOrderD() {
         Result result = orderService.confirmOrder(D());
         System.out.println(result);
+        try {
+            Thread.sleep(10000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Test
