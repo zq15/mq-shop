@@ -22,3 +22,18 @@ spring:
 mybatis:
   mapper-locations: classpath:/org.zhouzhou.mq.mapper/*.xml
   type-aliases-package: org.zhouzhou.mq.pojo
+
+rocketmq:
+  name-server: 192.168.139.10:9876 # RocketMQ Namesrv
+  # Producer 配置项
+  producer:
+    group: orderProducerGroup
+mq:
+  order:
+    topic: orderTopic
+    consumer:
+      group:
+        name: order_orderTopic_cancel_group
+    tag:
+      confirm: order_confirm
+      cancel: order_cancel

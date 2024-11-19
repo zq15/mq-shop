@@ -27,4 +27,13 @@ rocketmq:
   name-server: 192.168.139.10:9876 # RocketMQ Namesrv
   # Producer 配置项
   producer:
-    group: demo-producer-group # 生产者分组
+    group: orderProducerGroup
+mq:
+  order:
+    topic: orderTopic
+    consumer:
+      group:
+        name: order_orderTopic_cancel_group
+    tag:
+      confirm: order_confirm
+      cancel: order_cancel

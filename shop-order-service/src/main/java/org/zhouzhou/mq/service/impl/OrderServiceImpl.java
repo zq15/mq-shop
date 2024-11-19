@@ -2,16 +2,23 @@ package org.zhouzhou.mq.service.impl;
 
 import com.alibaba.dubbo.config.annotation.Reference;
 import com.alibaba.dubbo.config.annotation.Service;
+import com.alibaba.fastjson.JSON;
 import java.math.BigDecimal;
 import java.util.Date;
 import javax.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.rocketmq.common.message.Message;
+import org.apache.rocketmq.spring.core.RocketMQTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.zhouzhou.mq.ICouponService;
 import org.zhouzhou.mq.IGoodsService;
 import org.zhouzhou.mq.IOrderService;
 import org.zhouzhou.mq.IUserService;
 import org.zhouzhou.mq.constant.ShopCode;
+import org.zhouzhou.mq.entity.MQEntity;
 import org.zhouzhou.mq.entity.Result;
 import org.zhouzhou.mq.exception.CastException;
 import org.zhouzhou.mq.mapper.ShopOrderMapper;
@@ -42,6 +49,15 @@ public class OrderServiceImpl implements IOrderService {
     @Resource
     private ShopOrderMapper orderMapper;
 
+    @Autowired
+    private RocketMQTemplate rocketMQTemplate;
+
+    @Value("${mq.order.topic}")
+    private String topic;
+
+    @Value("${mq.order.tag.cancel}")
+    private String cancelTag;
+
     @Override
     public Result confirmOrder(ShopOrder order) {
         //1.校验订单
@@ -56,14 +72,49 @@ public class OrderServiceImpl implements IOrderService {
             changeCouponStatus(order);
             //5.使用余额
             reduceMoneyPaid(order);
+
+            // 手动抛出异常
+            CastException.cast(ShopCode.SHOP_FAIL);
             //6.确认订单
             updateOrderStatus(order);
             log.info("订单:["+orderId+"]确认成功");
             return new Result(ShopCode.SHOP_SUCCESS.getSuccess(), ShopCode.SHOP_SUCCESS.getMessage());
         } catch (Exception e) {
             //确认订单失败,发送消息
+            MQEntity cancelOrderMQ = new MQEntity();
+            cancelOrderMQ.setOrderId(order.getOrderId());
+            cancelOrderMQ.setCouponId(order.getCouponId());
+            cancelOrderMQ.setGoodsId(order.getGoodsId());
+            cancelOrderMQ.setGoodsNumber(order.getGoodsNumber());
+            cancelOrderMQ.setUserId(order.getUserId());
+            cancelOrderMQ.setUserMoney(order.getMoneyPaid());
+            try {
+                sendMessage(topic,
+                    cancelTag,
+                    cancelOrderMQ.getOrderId().toString(),
+                    JSON.toJSONString(cancelOrderMQ));
+            } catch (Exception e1) {
+                e1.printStackTrace();
+                CastException.cast(ShopCode.SHOP_MQ_SEND_MESSAGE_FAIL);
+            }
             return new Result(ShopCode.SHOP_FAIL.getSuccess(), ShopCode.SHOP_FAIL.getMessage());
         }
+    }
+
+
+    private void sendMessage(String topic, String tags, String keys, String body) throws Exception {
+        //判断Topic是否为空
+        if (StringUtils.isEmpty(topic)) {
+            CastException.cast(ShopCode.SHOP_MQ_TOPIC_IS_EMPTY);
+        }
+        //判断消息内容是否为空
+        if (StringUtils.isEmpty(body)) {
+            CastException.cast(ShopCode.SHOP_MQ_MESSAGE_BODY_IS_EMPTY);
+        }
+        //消息体
+        Message message = new Message(topic, tags, keys, body.getBytes());
+        //发送消息
+        rocketMQTemplate.getProducer().send(message);
     }
 
     private void checkOrder(ShopOrder order) {
